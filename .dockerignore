@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Environment files (NEVER in image)
+.env
+.env.local
+.env.production
+.env.dev
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Testing artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Django generated files
+staticfiles/
+media/
+db.sqlite3
+
+# Docker files (not needed inside the image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+.docker/
+
+# Docs
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Logs
+*.log
