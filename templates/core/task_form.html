@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit Task{% else %}New Task{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-9 col-lg-7">
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'project-list' %}">Projects</a></li>
+                {% if project %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'project-detail' project.pk %}">{{ project.title }}</a>
+                </li>
+                {% elif object %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'project-detail' object.project.pk %}">{{ object.project.title }}</a>
+                </li>
+                {% endif %}
+                <li class="breadcrumb-item active">
+                    {% if object %}Edit Task{% else %}New Task{% endif %}
+                </li>
+            </ol>
+        </nav>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 pt-4 pb-0">
+                <h4 class="mb-0">
+                    <i class="bi bi-check2-square me-2 text-primary"></i>
+                    {% if object %}Edit Task{% else %}Create New Task{% endif %}
+                </h4>
+                {% if project %}
+                <p class="text-muted small mb-0 mt-1">
+                    in project <strong>{{ project.title }}</strong>
+                </p>
+                {% endif %}
+            </div>
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="{{ form.title.id_for_label }}" class="form-label fw-semibold">Title</label>
+                            {{ form.title }}
+                            {% for error in form.title.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-12">
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">
+                                Description <small class="text-muted fw-normal">(optional)</small>
+                            </label>
+                            {{ form.description }}
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="{{ form.status.id_for_label }}" class="form-label fw-semibold">Status</label>
+                            {{ form.status }}
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="{{ form.priority.id_for_label }}" class="form-label fw-semibold">Priority</label>
+                            {{ form.priority }}
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="{{ form.due_date.id_for_label }}" class="form-label fw-semibold">
+                                Due Date <small class="text-muted fw-normal">(optional)</small>
+                            </label>
+                            {{ form.due_date }}
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="{{ form.assigned_to.id_for_label }}" class="form-label fw-semibold">
+                                Assign To <small class="text-muted fw-normal">(optional)</small>
+                            </label>
+                            {{ form.assigned_to }}
+                        </div>
+                        <div class="col-12">
+                            <label for="{{ form.tags.id_for_label }}" class="form-label fw-semibold">
+                                Tags <small class="text-muted fw-normal">(hold Ctrl/Cmd to select multiple)</small>
+                            </label>
+                            {{ form.tags }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 pt-4">
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-save me-1"></i>
+                            {% if object %}Save Changes{% else %}Create Task{% endif %}
+                        </button>
+                        {% if object %}
+                        <a href="{% url 'task-detail' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        {% elif project %}
+                        <a href="{% url 'project-detail' project.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
