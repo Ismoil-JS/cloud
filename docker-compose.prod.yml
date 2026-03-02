@@ -1,0 +1,75 @@
+version: '3.8'
+
+# Production compose — uses pre-built image from Docker Hub, Nginx, Gunicorn
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: taskflow_db
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-taskmanager}
+      POSTGRES_USER: ${DB_USER:-taskmanager}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-taskmanager} -d ${DB_NAME:-taskmanager}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  web:
+    image: ${DOCKERHUB_USERNAME}/taskflow:latest
+    container_name: taskflow_web
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    env_file:
+      - .env
+    environment:
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app_network
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: taskflow_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+      # SSL certificates mounted from host (obtained via Certbot)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - web
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+
+networks:
+  app_network:
+    driver: bridge
