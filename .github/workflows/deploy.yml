@@ -102,7 +102,7 @@ jobs:
 
             docker volume rm task-management_static_files task-management_media_files 2>/dev/null || true
 
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
 
             docker image prune -af
 
