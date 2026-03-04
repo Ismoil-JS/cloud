@@ -53,7 +53,7 @@ services:
     container_name: taskflow_nginx
     restart: always
     ports:
-      - "8080:80"
+      - "1313:80"
     volumes:
       - static_volume:/app/staticfiles:ro
       - media_volume:/app/media:ro
