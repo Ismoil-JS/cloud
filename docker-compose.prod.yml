@@ -23,7 +23,7 @@ services:
       - app_network
 
   web:
-    image: ${DOCKERHUB_USERNAME}/taskflow:latest
+    image: ghcr.io/ismoil-js/cloud:latest
     container_name: taskflow_web
     restart: always
     volumes:
