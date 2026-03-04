@@ -96,13 +96,13 @@ jobs:
 
             echo "$CICD_TOKEN" | docker login ghcr.io -u ismoil-js --password-stdin
 
-            docker compose pull
+            docker compose -f docker-compose.prod.yml pull
 
-            docker compose down
+            docker compose -f docker-compose.prod.yml down
 
             docker volume rm task-management_static_files task-management_media_files 2>/dev/null || true
 
-            docker compose up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             docker image prune -af
 
