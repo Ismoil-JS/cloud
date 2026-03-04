@@ -1,143 +1,103 @@
-name: CI/CD Pipeline
+name: ci-cd pipeline
 
-# Trigger: run on every push to main and on pull requests targeting main
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - main
 
 env:
-  # Docker Hub image name (set DOCKERHUB_USERNAME in GitHub Secrets)
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/taskflow
+  IMAGE_NAME: ghcr.io/ismoil-js/cloud:latest
+  PROJECT_DIR: /opt/cloud
 
 jobs:
-  # ============================================================
-  # JOB 1: TEST — lint, run Django test suite against PostgreSQL
-  # ============================================================
-  test:
-    name: Run Tests & Lint
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run flake8 lint check
-        run: |
-          flake8 core/ config/ --max-line-length=120 \
-            --exclude=migrations,__pycache__ \
-            --ignore=E501,W503
-
-      - name: Run Django tests
-        env:
-          DJANGO_SECRET_KEY: ci-testing-secret-key-not-for-production
-          DEBUG: 'True'
-          DB_ENGINE: django.db.backends.postgresql
-          DB_NAME: test_db
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_HOST: localhost
-          DB_PORT: '5432'
-          ALLOWED_HOSTS: localhost,127.0.0.1
-        run: python manage.py test --verbosity=2
-
-  # ============================================================
-  # JOB 2: BUILD — build Docker image and push to Docker Hub
-  # Only runs on push to main (not on pull requests)
-  # ============================================================
   build:
-    name: Build & Push Docker Image
-    needs: test
+    name: Build & Push Image
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.CICD_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Tag with 'latest' and the commit SHA for traceability/rollback
-          tags: |
-            ${{ env.DOCKER_IMAGE }}:latest
-            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-          # Use GitHub Actions cache to speed up rebuilds
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ env.IMAGE_NAME }}
 
-  # ============================================================
-  # JOB 3: DEPLOY — SSH into server and update running containers
-  # ============================================================
   deploy:
     name: Deploy to Server
-    needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
 
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          CICD_TOKEN: ${{ secrets.CICD_TOKEN }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          PROJECT_DIR: ${{ env.PROJECT_DIR }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_ALLOWED_HOSTS: ${{ secrets.DJANGO_ALLOWED_HOSTS }}
+          POSTGRES_DB: ${{ secrets.DB_ENGINE }}
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: CICD_TOKEN,IMAGE_NAME,PROJECT_DIR,DJANGO_SECRET_KEY,DJANGO_ALLOWED_HOSTS,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD
           script: |
             set -e
-            cd ~/taskflow
 
-            echo "==> Pulling latest images from Docker Hub..."
-            docker compose -f docker-compose.prod.yml pull
+            if [ -d "$PROJECT_DIR" ] && [ ! -d "$PROJECT_DIR/.git" ]; then
+              rm -rf "$PROJECT_DIR"
+            fi
 
-            echo "==> Restarting services with zero-downtime rolling update..."
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://github.com/Ismoil-JS/cloud.git "$PROJECT_DIR"
+            fi
 
-            echo "==> Running database migrations..."
-            docker compose -f docker-compose.prod.yml exec -T web \
-              python manage.py migrate --noinput
+            cd "$PROJECT_DIR"
 
-            echo "==> Collecting static files..."
-            docker compose -f docker-compose.prod.yml exec -T web \
-              python manage.py collectstatic --noinput
+            git pull origin main
 
-            echo "==> Cleaning up unused Docker images..."
-            docker image prune -f
+            # Build CSRF origins from ALLOWED_HOSTS (prepend http:// to each host)
+            CSRF_ORIGINS=$(echo "$DJANGO_ALLOWED_HOSTS" | tr ',' '\n' | sed 's|^|http://|' | paste -sd ',')
 
-            echo "==> Deployment complete!"
-            docker compose -f docker-compose.prod.yml ps
+            printf '%s\n' \
+              "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY" \
+              "DJANGO_DEBUG=False" \
+              "DJANGO_ALLOWED_HOSTS=$DJANGO_ALLOWED_HOSTS" \
+              "DJANGO_CSRF_TRUSTED_ORIGINS=$CSRF_ORIGINS" \
+              "DB_ENGINE=$DB_ENGINE" \
+              "DB_USER=$DB_USER" \
+              "DB_PASSWORD=$DB_PASSWORD" \
+              "POSTGRES_HOST=db" \
+              "POSTGRES_PORT=5432" > .env
+
+            echo "$CICD_TOKEN" | docker login ghcr.io -u ismoil-js --password-stdin
+
+            docker compose pull
+
+            # Stop containers and remove old static/media volumes (root-owned files fix)
+            docker compose down
+            docker volume rm task-management_static_files task-management_media_files 2>/dev/null || true
+
+            docker compose up -d --remove-orphans
+            docker image prune -af
+
+            echo "Deployment successful"
