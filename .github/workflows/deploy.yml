@@ -7,7 +7,7 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/ismoil-js/cloud:latest
-  PROJECT_DIR: /opt/cloud
+  PROJECT_DIR: /home/${{ secrets.SERVER_USERNAME }}/cloud
 
 jobs:
   build:
@@ -52,30 +52,35 @@ jobs:
           PROJECT_DIR: ${{ env.PROJECT_DIR }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_ALLOWED_HOSTS: ${{ secrets.DJANGO_ALLOWED_HOSTS }}
-          POSTGRES_DB: ${{ secrets.DB_ENGINE }}
-          POSTGRES_USER: ${{ secrets.DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_ENGINE: ${{ secrets.DB_ENGINE }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: CICD_TOKEN,IMAGE_NAME,PROJECT_DIR,DJANGO_SECRET_KEY,DJANGO_ALLOWED_HOSTS,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD
+          envs: CICD_TOKEN,IMAGE_NAME,PROJECT_DIR,DJANGO_SECRET_KEY,DJANGO_ALLOWED_HOSTS,DB_ENGINE,DB_USER,DB_PASSWORD
           script: |
             set -e
+
+            # Ensure project directory exists
+            mkdir -p "$PROJECT_DIR"
 
             if [ -d "$PROJECT_DIR" ] && [ ! -d "$PROJECT_DIR/.git" ]; then
               rm -rf "$PROJECT_DIR"
             fi
 
-            if [ ! -d "$PROJECT_DIR" ]; then
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
               git clone https://github.com/Ismoil-JS/cloud.git "$PROJECT_DIR"
             fi
 
             cd "$PROJECT_DIR"
 
-            git pull origin main
+            git fetch origin
+            git checkout master
+            git pull origin master
 
-            # Build CSRF origins from ALLOWED_HOSTS (prepend http:// to each host)
+            # Build CSRF origins
             CSRF_ORIGINS=$(echo "$DJANGO_ALLOWED_HOSTS" | tr ',' '\n' | sed 's|^|http://|' | paste -sd ',')
 
             printf '%s\n' \
@@ -93,11 +98,12 @@ jobs:
 
             docker compose pull
 
-            # Stop containers and remove old static/media volumes (root-owned files fix)
             docker compose down
+
             docker volume rm task-management_static_files task-management_media_files 2>/dev/null || true
 
             docker compose up -d --remove-orphans
+
             docker image prune -af
 
             echo "Deployment successful"
