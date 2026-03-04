@@ -81,7 +81,7 @@ jobs:
             git pull origin master
 
             # Build CSRF origins
-            CSRF_ORIGINS=$(echo "$DJANGO_ALLOWED_HOSTS" | tr ',' '\n' | sed 's|^|http://|' | paste -sd ',')
+            CSRF_ORIGINS=$(echo "$DJANGO_ALLOWED_HOSTS" | tr ',' '\n' | sed 's|^|https://|' | paste -sd ',')
 
             printf '%s\n' \
               "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY" \
