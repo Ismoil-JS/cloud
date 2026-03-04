@@ -85,14 +85,15 @@ jobs:
 
             printf '%s\n' \
               "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY" \
-              "DJANGO_DEBUG=False" \
+              "DEBUG=False" \
               "DJANGO_ALLOWED_HOSTS=*" \
-              "DJANGO_CSRF_TRUSTED_ORIGINS=$CSRF_ORIGINS" \
+              "SECURE_SSL_REDIRECT=False" \
               "DB_ENGINE=$DB_ENGINE" \
+              "DB_NAME=taskmanager" \
               "DB_USER=$DB_USER" \
               "DB_PASSWORD=$DB_PASSWORD" \
-              "POSTGRES_HOST=db" \
-              "POSTGRES_PORT=5432" > .env
+              "DB_HOST=db" \
+              "DB_PORT=5432" > .env
 
             echo "$CICD_TOKEN" | docker login ghcr.io -u ismoil-js --password-stdin
 
